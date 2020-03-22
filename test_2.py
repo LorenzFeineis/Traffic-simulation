@@ -94,5 +94,4 @@ for time in range(1000):
     print("moved_cars:",traf_2.moved_cars[-1])
 
 
-plt.plot(range(1000),traf_2.moved_cars)
-plt.show()
+print(traf_2.std_num_cars)

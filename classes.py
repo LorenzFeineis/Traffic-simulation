@@ -128,6 +128,7 @@ class Traffic():
         self.time = time
         self.num_cars = []
         self.moved_cars = []
+        self.std_num_cars = []
     def random_init(self,bottombound=0,upperbound =100):
         appendix = []
         for street in self.edges:
@@ -135,6 +136,7 @@ class Traffic():
             street.num_cars = random.randrange(bottombound,upperbound)
             appendix.append(street.num_cars)
         self.num_cars.append(appendix)
+        self.std_num_cars.append(np.std(appendix))
     def distribute_cars(self):
         ### distributes all new cars in a lane onto the available turning_lanes
         for street in self.edges:
@@ -158,7 +160,7 @@ class Traffic():
         self.moved_cars.append(len(changes))
         self.distribute_cars()
         self.num_cars.append([street.num_cars for street in self.edges])
-
+        self.std_num_cars.append(np.std(self.num_cars[-1]))
 
 def build_system(adjadency):
     ### Creates a system from a given adjadency matrix
