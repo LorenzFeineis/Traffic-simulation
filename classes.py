@@ -49,7 +49,7 @@ class Cell():
         self.state = None
 
 class Car():
-    def __inti__(self, idx, length = 1, vmax = 1):
+    def __init__(self, idx, length = 1, vmax = 1):
         self.idx = idx
         self.length = length
         self.vmax = vmax
@@ -62,7 +62,7 @@ class Car():
         self.location = (street, cell)
     def set_direction(self):
         street = self.location[0]
-        self.direction = random.choices(population = street.turning_lanes, weights = street.weights, k = 1)
+        self.direction = random.choices(population = street.turning_lanes, weights = street.weights, k = 1)[0]
 
 
 class Turning_lane():
@@ -205,15 +205,15 @@ class Traffic():
             for cell_id in range(street.num_cars):
                 # this removes the first car in cars and puts it at the cell
                 car = cars.pop()
-                street.cells[cell_id] = car
+                street.cells[cell_id].state = car
                 car.location = (street,street.cells[cell_id])
                 self.cars.append(car)
                 street.cars.append(car)
                 car.set_direction()
     def determine_v1(self):
         for street in self.edges:
-            if street.cell[0].state!=None:
-                car = street.cell[0].state
+            if street.cells[0].state!=None:
+                car = street.cells[0].state
                 turning_lane = car.direction
                 if turning_lane.light:
                     if car.v0 == 0:
@@ -235,11 +235,11 @@ class Traffic():
                 else:
                     car.v1 = 0
                 headway = 0
+                v0_leader = car.v0
             else:
                 headway = 1 ## The headway for the next car in this street
-                v0_leader = car.v0
-            if street.cell[1] != None:
-                car = street.cell.state[1]
+            if street.cells[1] != None:
+                car = street.cells[1].state
                 if car.v0 == 0:
                     if headway>0:
                         car.v1 = 1
@@ -266,7 +266,7 @@ class Traffic():
             for cell in street.cells[2:]:
                 if cell.state != None:
                     car = cell.state
-                    if car.v0 = 0:
+                    if car.v0 == 0:
                         if headway>0:
                             car.v1 = 1
                         elif v0_leader == 1:
