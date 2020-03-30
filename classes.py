@@ -1,7 +1,7 @@
 import numpy as np
 import random
 import pprint
-random.seed(42)
+random.seed(40)
 
 
 def prob_dist(num_points):
@@ -21,8 +21,8 @@ class Street():
         self.turning_lanes = []
         self.weights = True ### weights is a dictionary with keys, value pairs (inc,out) : weight
         cells = []
-        for c in range(capacity):
-            cells.append(Cell(self,c))
+        for idx in range(capacity):
+            cells.append(Cell(self,idx))
         self.cells = cells
         self.cars = []
     def distribute_on_lanes(self):
@@ -34,7 +34,7 @@ class Street():
         try:
             if len(weights.keys())==len(turning_lanes) and sum(weights.values()) ==1:
                 new_weights = [0 for lane in range(len(turning_lanes))]
-                for lane in weights:
+                for lane in weights.keys():
                     new_weights[turning_lanes.index(lane)] = weights[lane]
                 self.weights = new_weights
             else:
@@ -160,7 +160,7 @@ class Traffic():
         self.edges = system.edges
         self.turning_lanes = system.turning_lanes
         self.time = time
-        self.num_cars = []
+        self.num_cars = [] ### contains [len(street.cars) for street in self.streets]
         self.moved_cars = []
         self.std_num_cars = []
         self.cars = []
@@ -168,7 +168,7 @@ class Traffic():
         appendix = []
         for street in self.edges:
             upperbound = min([upperbound,street.cap])
-            street.num_cars = random.randrange(bottombound,upperbound)
+            street.num_cars = random.randint(bottombound,upperbound)
             appendix.append(street.num_cars)
         self.num_cars.append(appendix)
         self.std_num_cars.append(np.std(appendix))
@@ -198,25 +198,35 @@ class Traffic():
         self.std_num_cars.append(np.std(self.num_cars[-1]))
     ### The following methods include the classes cells and cars for more
     ### realistic traffic simulationsreturn something
-    def random_init_cars(self, cars, bottombound, upperbound):
+    def random_init_cars(self,cars, bottombound, upperbound):
         # cars is a list containing cars
-        self.random_init(bottombound, upperbound)
+        num_cars = []
         for street in self.edges:
-            for cell_id in range(street.num_cars):
+            upperbound = min([upperbound,street.cap])
+            for cell_id in range(random.randint(bottombound,upperbound)):
                 # this removes the first car in cars and puts it at the cell
-                car = cars.pop()
+                car = cars.pop(0)
                 street.cells[cell_id].state = car
                 car.location = (street,street.cells[cell_id])
                 self.cars.append(car)
                 street.cars.append(car)
                 car.set_direction()
+            street.num_cars = len(street.cars)
+            num_cars.append(len(street.cars))
+        self.num_cars.append(num_cars)
+        self.std_num_cars.append(np.std(num_cars))
     def determine_v1(self):
+        ### Assumption: v0 is valid
         for street in self.edges:
+            ### first we check the cell in front of the traffic light
             if street.cells[0].state!=None:
                 car = street.cells[0].state
                 turning_lane = car.direction
-                if turning_lane.light:
+                if turning_lane.light: ## is the traffic light green
                     if car.v0 == 0:
+                        ### for movement in the next timestep the last cell of
+                        ### the target road has to be empty at the beginning of
+                        ### the next time step.
                         if turning_lane.out.cells[-1].state == None:
                             car.v1 = 1
                         elif turning_lane.out.cells[-1].state.v0 == 1:
@@ -224,26 +234,26 @@ class Traffic():
                         else:
                             car.v1 = 0
                     if car.v0 ==1:
-                        try:
-                            if turning_lane.out.cells[-2].state.velocity == 0:
-                                car.v1 = 0
-                            else:
-                                car.v1 = 1
-                        except AttributeError:
-                            ## This Error arises if the cell is empty
+                        ### for motion in the next time step
+                        if turning_lane.out.cells[-2].state == None:
                             car.v1 = 1
-                else:
+                        elif turning_lane.out.cells[-2].state.v0 ==1:
+                            car.v1 = 1
+                        else:
+                            car.v0 = 0
+                else: ## if the traffic light is red
                     car.v1 = 0
                 headway = 0
-                v0_leader = car.v0
+                leader = car
             else:
                 headway = 1 ## The headway for the next car in this street
-            if street.cells[1] != None:
+            ## Check the car that possibly arrives at the traffic light
+            if street.cells[1].state != None:
                 car = street.cells[1].state
                 if car.v0 == 0:
                     if headway>0:
                         car.v1 = 1
-                    elif v0_leader > 0:
+                    elif leader.v0 > 0:
                         car.v1 = 1
                     else:
                         car.v1 = 0
@@ -256,10 +266,13 @@ class Traffic():
                             car.v1 = 1
                         else:
                             car.v1 = 0
+                        if headway == 0:
+                            if leader.v1 == 0:
+                                car.v1 = 0
                     else:
                         car.v1 = 0
                 headway = 0
-                v0_leader = car.v0
+                leader = car
             else:
                 headway +=1
             ## computation for the rest of the street
@@ -269,19 +282,53 @@ class Traffic():
                     if car.v0 == 0:
                         if headway>0:
                             car.v1 = 1
-                        elif v0_leader == 1:
+                        elif leader.v0 == 1:
                             car.v1 = 1
                         else:
                             car.v1 = 0
                     else:
-                        if headway==1 and v0_leader ==0:
+                        if headway == 1 and leader.v0 == 0:
+                            car.v1 = 0
+                        elif headway == 0 and leader.v1 == 0:
                             car.v1 = 0
                         else:
                             car.v1 = 1
                     headway = 0
-                    v0_leader = car.v0
+                    leader = car
                 else:
                     headway +=1
+    def move_cars(self):
+        moved_cars = 0
+        for car in self.cars:
+            if car.v0 ==1:
+                moved_cars+=1
+                current_street, old_cell = car.location[0], car.location[1]
+                print(car.idx, current_street.edge,old_cell.idx)
+                if old_cell.idx == 0:
+                    print("the car above changes road")
+
+                    #print("before", current_street.cars)
+                    current_street.cars.remove(car)
+                    #print("after", current_street.cars)
+                    new_street = car.direction.out
+                    print("next cell:", new_street.cells[-1].state )
+                    new_street.cars.append(car)
+                    car.set_location(new_street, new_street.cells[-1])
+                    car.set_direction()
+                else:
+                    new_cell_idx = old_cell.idx -1
+                    new_cell = current_street.cells[new_cell_idx]
+                    car.set_location(current_street, new_cell)
+                old_cell.state = None
+            car.v0 = car.v1
+        self.moved_cars.append(moved_cars)
+    def time_step_cars(self):
+        self.time +=1
+        self.determine_v1()
+        self.move_cars()
+        self.num_cars.append([len(street.cars) for street in self.edges])
+        self.std_num_cars.append(np.std(self.num_cars[-1]))
+
 
 def build_system(adjadency):
     ### Creates a system from a given adjadency matrix
